@@ -164,13 +164,14 @@ class StatusTableViewController: UITableViewController, UIGestureRecognizerDeleg
             }
 
             dispatch_group_enter(reloadGroup)
-            dataManager.loopManager.getLoopStatus { (predictedGlucose, recommendedTempBasal, lastTempBasal, lastLoopCompleted, error) -> Void in
+            dataManager.loopManager.getLoopStatus { (predictedGlucose, reflectedGlucose, recommendedTempBasal, lastTempBasal, lastLoopCompleted, error) -> Void in
                 if error != nil {
                     self.needsRefresh = true
                 }
 
                 self.charts.predictedGlucoseValues = predictedGlucose ?? []
                 self.recommendedTempBasal = recommendedTempBasal
+                self.reflectedGlucose = reflectedGlucose
                 self.lastTempBasal = lastTempBasal
                 self.lastLoopCompleted = lastLoopCompleted
 
@@ -280,11 +281,14 @@ class StatusTableViewController: UITableViewController, UIGestureRecognizerDeleg
 
     private enum StatusRow: Int {
         case RecommendedBasal = 0
+        case ReflectedGlucose
 
-        static let count = 1
+        static let count = 2
     }
 
     private var recommendedTempBasal: LoopDataManager.TempBasalRecommendation?
+
+    private var reflectedGlucose: [GlucoseValue]?
 
     private var lastTempBasal: DoseEntry? {
         didSet {
@@ -501,6 +505,18 @@ class StatusTableViewController: UITableViewController, UIGestureRecognizerDeleg
                 } else {
                     cell.accessoryView = nil
                 }
+            case .ReflectedGlucose:
+                cell.textLabel?.text = "Predicted 30m ago"
+
+                if let startGlucose = reflectedGlucose?.first, let endGlucose = reflectedGlucose?.last, let currentGlucose = self.dataManager.glucoseStore?.latestGlucose {
+                    let startValue = Int(startGlucose.quantity.doubleValueForUnit(charts.glucoseUnit))
+                    let predictedValue = Int(endGlucose.quantity.doubleValueForUnit(charts.glucoseUnit))
+                    let currentValue = Int(currentGlucose.quantity.doubleValueForUnit(charts.glucoseUnit))
+
+                    cell.detailTextLabel?.text = "\(startValue) → \(predictedValue) @ \(timeFormatter.stringFromDate(endGlucose.startDate)) \(currentValue - predictedValue)"
+                } else {
+                    cell.detailTextLabel?.text = emptyValueString
+                }
             }
 
             return cell
@@ -597,6 +613,8 @@ class StatusTableViewController: UITableViewController, UIGestureRecognizerDeleg
                         }
                     }
                 }
+            case .ReflectedGlucose:
+                break
             }
         case .Sensor:
             if let URL = NSURL(string: "dexcomcgm://") {
